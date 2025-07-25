@@ -2,19 +2,28 @@ provider "aws" {
   region = "ap-south-1"
 }
 
+data "aws_secretsmanager_secret_version" "github_token" {
+  secret_id = "github-oauth-token"
+}
+
 resource "aws_s3_bucket" "artifact_bucket" {
-  bucket = "${var.project_name}-artifacts"
-  force_destroy = true
+  bucket        = "${var.project_name}-${var.environment}-artifacts"
+  force_destroy = false
+
+  tags = {
+    Project     = var.project_name
+    Environment = var.environment
+  }
 }
 
 resource "aws_iam_role" "codebuild_role" {
-  name = "${var.project_name}-codebuild-role"
+  name = "${var.project_name}-${var.environment}-codebuild-role"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17",
     Statement = [{
-      Action = "sts:AssumeRole",
-      Effect = "Allow",
+      Action    = "sts:AssumeRole",
+      Effect    = "Allow",
       Principal = {
         Service = "codebuild.amazonaws.com"
       }
@@ -28,31 +37,39 @@ resource "aws_iam_role_policy_attachment" "codebuild_policy" {
 }
 
 resource "aws_codebuild_project" "this" {
-  name          = "${var.project_name}-build"
-  service_role  = aws_iam_role.codebuild_role.arn
+  name         = "${var.project_name}-${var.environment}-build"
+  service_role = aws_iam_role.codebuild_role.arn
+
   artifacts {
     type = "CODEPIPELINE"
   }
+
   environment {
-    compute_type                = "BUILD_GENERAL1_SMALL"
-    image                       = "aws/codebuild/standard:5.0"
-    type                        = "LINUX_CONTAINER"
-    privileged_mode             = true
+    compute_type    = "BUILD_GENERAL1_SMALL"
+    image           = "aws/codebuild/standard:5.0"
+    type            = "LINUX_CONTAINER"
+    privileged_mode = true
   }
+
   source {
     type      = "CODEPIPELINE"
     buildspec = "buildspec.yml"
   }
+
+  tags = {
+    Project     = var.project_name
+    Environment = var.environment
+  }
 }
 
 resource "aws_iam_role" "codepipeline_role" {
-  name = "${var.project_name}-pipeline-role"
+  name = "${var.project_name}-${var.environment}-pipeline-role"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17",
     Statement = [{
-      Action = "sts:AssumeRole",
-      Effect = "Allow",
+      Action    = "sts:AssumeRole",
+      Effect    = "Allow",
       Principal = {
         Service = "codepipeline.amazonaws.com"
       }
@@ -66,8 +83,9 @@ resource "aws_iam_role_policy_attachment" "codepipeline_policy" {
 }
 
 resource "aws_codepipeline" "this" {
-  name     = "${var.project_name}-pipeline"
+  name     = "${var.project_name}-${var.environment}-pipeline"
   role_arn = aws_iam_role.codepipeline_role.arn
+
   artifact_store {
     location = aws_s3_bucket.artifact_bucket.bucket
     type     = "S3"
@@ -88,7 +106,7 @@ resource "aws_codepipeline" "this" {
         Owner      = split("/", var.github_repo)[0]
         Repo       = split("/", var.github_repo)[1]
         Branch     = var.github_branch
-        OAuthToken = var.github_token
+        OAuthToken = data.aws_secretsmanager_secret_version.github_token.secret_string
       }
     }
   }
@@ -109,5 +127,10 @@ resource "aws_codepipeline" "this" {
         ProjectName = aws_codebuild_project.this.name
       }
     }
+  }
+
+  tags = {
+    Project     = var.project_name
+    Environment = var.environment
   }
 }
