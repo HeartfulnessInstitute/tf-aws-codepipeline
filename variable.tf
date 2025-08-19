@@ -23,3 +23,15 @@ variable "environment" {
   description = "Deployment environment (e.g. dev, prod)"
   type        = string
 }
+
+variable "github_owner" {
+  description = "Deployment environment (e.g. dev, prod)"
+  type        = string
+}
+
+
+
+variable "github_connection_arn" {
+  description = "Deployment environment (e.g. dev, prod)"
+  type        = string
+}

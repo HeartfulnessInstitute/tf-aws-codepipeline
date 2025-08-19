@@ -8,10 +8,10 @@ output "codebuild_project_name" {
   value       = aws_codebuild_project.this.name
 }
 
-output "codepipeline_name" {
-  description = "Name of the AWS CodePipeline"
-  value       = aws_codepipeline.this.name
-}
+# output "codepipeline_name" {
+#   value       = aws_codepipeline.this.name
+# }
+
 
 output "codepipeline_role_arn" {
   description = "IAM role ARN for CodePipeline"
