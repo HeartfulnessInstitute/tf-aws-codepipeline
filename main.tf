@@ -31,6 +31,19 @@ resource "aws_iam_role" "codebuild_role" {
   })
 }
 
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": [
+        "secretsmanager:GetSecretValue"
+      ],
+      "Resource": "arn:aws:secretsmanager:ap-south-1:502390415551:secret:githubtoken-codepipeline-*"
+    }
+  ]
+}
+
 resource "aws_iam_role_policy_attachment" "codebuild_policy" {
   role       = aws_iam_role.codebuild_role.name
   policy_arn = "arn:aws:iam::aws:policy/AWSCodeBuildDeveloperAccess"
