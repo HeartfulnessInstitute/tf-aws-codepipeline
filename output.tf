@@ -3,10 +3,10 @@ output "artifact_bucket_name" {
   value       = aws_s3_bucket.artifact_bucket.bucket
 }
 
-output "codebuild_project_name" {
-  description = "Name of the AWS CodeBuild project"
-  value       = aws_codebuild_project.this.name
-}
+# output "codebuild_project_name" {
+#   description = "Name of the AWS CodeBuild project"
+#   value       = aws_codebuild_project.this.name
+# }
 
 # output "codepipeline_name" {
 #   value       = aws_codepipeline.this.name

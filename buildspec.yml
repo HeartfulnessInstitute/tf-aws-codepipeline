@@ -1,0 +1,50 @@
+version: 0.2
+
+env:
+  secrets-manager:
+    EC2_SSH_KEY: "ec2-ssh-key:private_key"   # Your private key in AWS Secrets Manager
+  variables:
+    APP_WORKING_DIR: "app_code"              # Path where your source code lives
+    EC2_USER: "ec2-user"                     # Change to "ubuntu" if Ubuntu EC2
+    EC2_HOST: "65.0.96.46"                   # Public IP or DNS of your EC2 instance
+    DEPLOY_DIR: "/var/www/html"              # Deployment folder in EC2
+
+phases:
+  install:
+    commands:
+      - echo "Installing required packages..."
+      - yum install -y unzip openssh-clients zip
+
+  build:
+    commands:
+      - echo "Packaging application source code..."
+      - mkdir -p output
+      - cd $APP_WORKING_DIR
+      - zip -r ../output/app.zip .
+      - cd ..
+      - echo "Build completed. Created output/app.zip"
+
+  post_build:
+    commands:
+      - echo "Starting deployment to EC2..."
+      # Save the private key from Secrets Manager to a file
+      - echo "$EC2_SSH_KEY" > ec2-key.pem
+      - chmod 600 ec2-key.pem
+
+      # Copy build artifact to EC2
+      - scp -o StrictHostKeyChecking=no -i ec2-key.pem output/app.zip $EC2_USER@$EC2_HOST:/tmp/app.zip
+
+      # SSH into EC2, unzip and deploy
+      - ssh -o StrictHostKeyChecking=no -i ec2-key.pem $EC2_USER@$EC2_HOST << 'EOF'
+          set -e
+          echo "Deploying application on EC2..."
+          sudo mkdir -p $DEPLOY_DIR
+          sudo unzip -o /tmp/app.zip -d $DEPLOY_DIR
+          sudo chown -R $EC2_USER:$EC2_USER $DEPLOY_DIR
+          rm -f /tmp/app.zip
+          echo "Deployment completed successfully."
+        EOF
+
+artifacts:
+  files:
+    - output/app.zip

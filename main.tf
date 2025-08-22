@@ -71,6 +71,22 @@ resource "aws_iam_role" "codedeploy_role" {
   })
 }
 
+resource "aws_iam_role_policy" "codepipeline_codestar_policy" {
+  name = "codepipeline-codestar-policy"
+  role = aws_iam_role.codepipeline_role.name
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect   = "Allow"
+        Action   = ["codestar-connections:UseConnection"]
+        Resource = "arn:aws:codestar-connections:ap-south-1:502390415551:connection/0b862296-0dd7-4b96-b0bb-c5e6d6ff775e"
+      }
+    ]
+  })
+}
+
 resource "aws_iam_role_policy_attachment" "codedeploy_role_attach" {
   role       = aws_iam_role.codedeploy_role.name
   policy_arn = "arn:aws:iam::aws:policy/service-role/AWSCodeDeployRole"
