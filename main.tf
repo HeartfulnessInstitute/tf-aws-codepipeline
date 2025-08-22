@@ -16,6 +16,7 @@ resource "aws_s3_bucket" "artifact_bucket" {
   }
 }
 
+
 resource "aws_iam_role" "codebuild_role" {
   name = "${var.project_name}-${var.environment}-codebuild-role"
 
@@ -31,17 +32,23 @@ resource "aws_iam_role" "codebuild_role" {
   })
 }
 
-{
-  "Version": "2012-10-17",
-  "Statement": [
-    {
-      "Effect": "Allow",
-      "Action": [
-        "secretsmanager:GetSecretValue"
-      ],
-      "Resource": "arn:aws:secretsmanager:ap-south-1:502390415551:secret:githubtoken-codepipeline-*"
-    }
-  ]
+
+resource "aws_iam_role_policy" "codebuild_secrets_policy" {
+  name = "${var.project_name}-${var.environment}-codebuild-secrets-policy"
+  role = aws_iam_role.codebuild_role.id
+
+  policy = jsonencode({
+    Version = "2012-10-17",
+    Statement = [
+      {
+        Effect   = "Allow",
+        Action   = [
+          "secretsmanager:GetSecretValue"
+        ],
+        Resource = "arn:aws:secretsmanager:ap-south-1:502390415551:secret:githubtoken-codepipeline-*"
+      }
+    ]
+  })
 }
 
 resource "aws_iam_role_policy_attachment" "codebuild_policy" {
@@ -178,9 +185,9 @@ resource "aws_codedeploy_deployment_group" "care_app_group" {
 
   ec2_tag_set {
     ec2_tag_filter {
-      key   = "project"
+      key   = "Project"
       type  = "KEY_AND_VALUE"
-      value = "StageCareServer"
+      value = "hfn-project"
     }
   }
 }
