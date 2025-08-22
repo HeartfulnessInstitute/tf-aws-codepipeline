@@ -166,7 +166,7 @@ resource "aws_codebuild_project" "terraform_build" {
 
   environment {
     compute_type                = "BUILD_GENERAL1_SMALL"
-    image                       = "aws/codebuild/standard:6.0" # Amazon Linux 2 standard
+    image                       = "aws/codebuild/standard:6.0" 
     type                        = "LINUX_CONTAINER"
     privileged_mode             = true
   }
@@ -183,7 +183,7 @@ resource "aws_codebuild_project" "terraform_build" {
 
 resource "aws_codedeploy_app" "care_app" {
   name             = "${var.environment}-care-app"
-  compute_platform = "Server" # or "ECS" if containerized
+  compute_platform = "Server" 
 }
 
 resource "aws_codedeploy_deployment_group" "care_app_group" {
