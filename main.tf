@@ -32,25 +32,6 @@ resource "aws_iam_role" "codebuild_role" {
   })
 }
 
-
-resource "aws_iam_role_policy" "codebuild_secrets_policy" {
-  name = "${var.project_name}-${var.environment}-codebuild-secrets-policy"
-  role = aws_iam_role.codebuild_role.id
-
-  policy = jsonencode({
-    Version = "2012-10-17",
-    Statement = [
-      {
-        Effect   = "Allow",
-        Action   = [
-          "secretsmanager:GetSecretValue"
-        ],
-        Resource = "arn:aws:secretsmanager:ap-south-1:502390415551:secret:githubtoken-codepipeline-*"
-      }
-    ]
-  })
-}
-
 resource "aws_iam_role_policy_attachment" "codebuild_policy" {
   role       = aws_iam_role.codebuild_role.name
   policy_arn = "arn:aws:iam::aws:policy/AWSCodeBuildDeveloperAccess"
@@ -143,6 +124,35 @@ resource "aws_iam_role_policy_attachment" "codedeploy_access" {
   policy_arn = "arn:aws:iam::aws:policy/AWSCodeDeployFullAccess"
 }
 
+resource "aws_iam_role_policy" "codebuild_secrets_access" {
+  name = "${var.project_name}-${var.environment}-codebuild-secrets-access"
+  role = aws_iam_role.codebuild_role.id
+
+  policy = jsonencode({
+    Version = "2012-10-17",
+    Statement = [
+      {
+        Effect = "Allow",
+        Action = [
+          "secretsmanager:GetSecretValue",
+          "secretsmanager:DescribeSecret"
+        ],
+        Resource = [
+          "arn:aws:secretsmanager:ap-south-1:502390415551:secret:githubtoken-codepipeline-*",
+          "arn:aws:secretsmanager:ap-south-1:502390415551:secret:ec2-ssh-key-*"
+        ]
+      },
+      {
+        Effect = "Allow",
+        Action = [
+          "kms:Decrypt",
+          "kms:DescribeKey"
+        ],
+        Resource = "arn:aws:kms:ap-south-1:502390415551:key/43e287b0-63e6-4202-81db-fea4a8ddbaf8"
+      }
+    ]
+  })
+}
 
 resource "aws_codebuild_project" "terraform_build" {
   name          = "${var.environment}-terraform-build"
