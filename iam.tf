@@ -186,7 +186,7 @@ resource "aws_iam_role_policy" "codebuild_logs_policy" {
   })
 }
 
-resource "aws_iam_role_policy_attachment" "codebuild_logs_attach" {
+resource "aws_iam_role_policy_attachment" "codebuild_logs" {
   role       = aws_iam_role.codebuild_role.name
-  policy_arn = "arn:aws:iam::aws:policy/service-role/AWSCodeBuildDeveloperAccess"
+  policy_arn = "arn:aws:iam::aws:policy/CloudWatchLogsFullAccess"
 }
