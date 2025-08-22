@@ -24,8 +24,14 @@ resource "aws_codebuild_project" "deploy_app" {
   build_timeout = 30
 
   artifacts {
-    type = "NO_ARTIFACTS"
+    type      = "S3"
+    location  = aws_s3_bucket.build_artifacts.bucket  # reference to your S3 bucket
+    path      = "build-output"                        # folder inside the bucket
+    name      = "app.zip"                             # artifact filename
+    packaging = "ZIP"                                 # (ZIP or NONE)
+    encryption_disabled = false
   }
+
 
   environment {
     compute_type    = "BUILD_GENERAL1_SMALL"
