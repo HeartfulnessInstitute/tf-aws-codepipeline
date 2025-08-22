@@ -87,8 +87,13 @@ resource "aws_iam_role_policy" "codepipeline_inline" {
           "s3:GetObject",
           "s3:GetObjectVersion",
           "s3:PutObject",
+          "s3:PutObjectAcl",
+          "s3:ListBucket"
         ]
-        Resource = "*"
+        Resource = [
+          "arn:aws:s3:::hfn-project-dev-artifacts",
+          "arn:aws:s3:::hfn-project-dev-artifacts/*"
+        ]
       },
       {
         Effect   = "Allow"
@@ -103,6 +108,7 @@ resource "aws_iam_role_policy" "codepipeline_inline" {
     ]
   })
 }
+
 
 resource "aws_iam_role_policy_attachment" "codedeploy_role_attach" {
   role       = aws_iam_role.codedeploy_role.name
@@ -190,3 +196,4 @@ resource "aws_iam_role_policy_attachment" "codebuild_logs" {
   role       = aws_iam_role.codebuild_role.name
   policy_arn = "arn:aws:iam::aws:policy/CloudWatchLogsFullAccess"
 }
+
