@@ -154,7 +154,7 @@ resource "aws_codepipeline" "deployment_pipeline" {
       output_artifacts = ["build_output"]
 
       configuration = {
-        ProjectName = aws_codebuild_project.terraform_build.name
+        ProjectName = aws_codebuild_project.deploy_app.name
       }
     }
   }

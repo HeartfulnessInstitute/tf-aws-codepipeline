@@ -9,9 +9,9 @@ output "artifact_bucket_name" {
 #   value       = aws_codebuild_project.this.name
 # }
 
- output "codepipeline_name" {
-   value       = aws_codepipeline.this.name
- }
+#  output "codepipeline_name" {
+#    value       = aws_codepipeline.this.name
+#  }
 
 
 output "codepipeline_role_arn" {
