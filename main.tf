@@ -115,6 +115,51 @@ resource "aws_iam_role_policy_attachment" "codedeploy_access" {
   role       = aws_iam_role.codepipeline_role.name
   policy_arn = "arn:aws:iam::aws:policy/AWSCodeDeployFullAccess"
 }
+resource "aws_iam_role_policy" "codepipeline_inline" {
+  name = "${var.project_name}-${var.environment}-pipeline-inline"
+  role = aws_iam_role.codepipeline_role.id
+
+  policy = jsonencode({
+    Version = "2012-10-17",
+    Statement = [
+      # Allow starting CodeBuild
+      {
+        Effect   = "Allow",
+        Action   = [
+          "codebuild:StartBuild",
+          "codebuild:BatchGetBuilds"
+        ],
+        Resource = "*"
+      },
+      # Allow S3 artifact access
+      {
+        Effect   = "Allow",
+        Action   = [
+          "s3:GetObject",
+          "s3:GetObjectVersion",
+          "s3:PutObject"
+        ],
+        Resource = "*"
+      },
+      # Allow GitHub (CodeStar) connection
+      {
+        Effect   = "Allow",
+        Action   = [
+          "codestar-connections:UseConnection"
+        ],
+        Resource = var.github_connection_arn
+      },
+      # Allow CodeDeploy
+      {
+        Effect   = "Allow",
+        Action   = [
+          "codedeploy:*"
+        ],
+        Resource = "*"
+      }
+    ]
+  })
+}
 
 resource "aws_iam_role_policy" "codebuild_secrets_access" {
   name = "${var.project_name}-${var.environment}-codebuild-secrets-access"
