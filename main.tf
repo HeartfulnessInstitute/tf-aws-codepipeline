@@ -25,7 +25,7 @@ resource "aws_codebuild_project" "deploy_app" {
 
   artifacts {
     type      = "S3"
-    location  = aws_s3_bucket.build_artifacts.bucket  # reference to your S3 bucket
+    location  = aws_s3_bucket.artifact_bucket.bucket  # reference to your S3 bucket
     path      = "build-output"                        # folder inside the bucket
     name      = "app.zip"                             # artifact filename
     packaging = "ZIP"                                 # (ZIP or NONE)
