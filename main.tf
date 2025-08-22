@@ -17,26 +17,73 @@ resource "aws_s3_bucket" "artifact_bucket" {
 }
 
 
-resource "aws_codebuild_project" "terraform_build" {
-  name          = "${var.environment}-terraform-build"
-  description   = "Build project for ${var.environment} environment"
+resource "aws_codebuild_project" "deploy_app" {
+  name          = "${var.environment}-app-deploy"
+  description   = "Build & deploy project using GitHub source for ${var.environment}"
   service_role  = aws_iam_role.codebuild_role.arn
   build_timeout = 30
 
   artifacts {
-    type = "CODEPIPELINE"
+    type = "NO_ARTIFACTS"
   }
 
   environment {
-    compute_type                = "BUILD_GENERAL1_SMALL"
-    image                       = "aws/codebuild/standard:6.0" 
-    type                        = "LINUX_CONTAINER"
-    privileged_mode             = true
+    compute_type    = "BUILD_GENERAL1_SMALL"
+    image           = "aws/codebuild/standard:6.0"
+    type            = "LINUX_CONTAINER"
+    privileged_mode = false
   }
 
   source {
-    type      = "CODEPIPELINE"
-    buildspec = "buildspec.yml"
+    type            = "GITHUB"
+    location        = "https://github.com/HeartfulnessInstitute/hfncare.git"
+    git_clone_depth = 1
+
+    buildspec = <<EOF
+version: 0.2
+
+env:
+  secrets-manager:
+    EC2_SSH_KEY: "ec2-ssh-key:private_key"
+  variables:
+    APP_WORKING_DIR: "app_code"
+    EC2_USER: "ec2-user"
+    EC2_HOST: "65.0.96.46"
+    DEPLOY_DIR: "/var/www/html"
+
+phases:
+  install:
+    commands:
+      - echo "Installing packages..." && yum install -y unzip openssh-clients zip
+
+  build:
+    commands:
+      - echo "Packaging app..."
+      - mkdir -p output
+      - cd $APP_WORKING_DIR
+      - zip -r ../output/app.zip .
+      - cd ..
+      - echo "Created output/app.zip"
+
+  post_build:
+    commands:
+      - echo "Deploying to EC2..."
+      - echo "$EC2_SSH_KEY" > ec2-key.pem
+      - chmod 600 ec2-key.pem
+      - scp -o StrictHostKeyChecking=no -i ec2-key.pem output/app.zip $EC2_USER@$EC2_HOST:/tmp/app.zip
+      - ssh -o StrictHostKeyChecking=no -i ec2-key.pem $EC2_USER@$EC2_HOST << 'DEPLOY'
+          set -e
+          sudo mkdir -p $DEPLOY_DIR
+          sudo unzip -o /tmp/app.zip -d $DEPLOY_DIR
+          sudo chown -R $EC2_USER:$EC2_USER $DEPLOY_DIR
+          rm -f /tmp/app.zip
+          echo "Deployment succeeded!"
+        DEPLOY
+
+artifacts:
+  files:
+    - output/app.zip
+EOF
   }
 
   tags = {
@@ -44,6 +91,7 @@ resource "aws_codebuild_project" "terraform_build" {
     Project     = var.project_name
   }
 }
+
 
 resource "aws_codedeploy_app" "care_app" {
   name             = "${var.environment}-care-app"
