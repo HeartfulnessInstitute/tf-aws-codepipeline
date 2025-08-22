@@ -3,21 +3,15 @@ output "artifact_bucket_name" {
   value       = aws_s3_bucket.artifact_bucket.bucket
 }
 
-<<<<<<< HEAD
+
 # output "codebuild_project_name" {
 #   description = "Name of the AWS CodeBuild project"
 #   value       = aws_codebuild_project.this.name
 # }
-=======
-/*output "codebuild_project_name" {
-  description = "Name of the AWS CodeBuild project"
-  value       = aws_codebuild_project.this.name
-}
->>>>>>> 543a412f44a3a74dee91740f638e57cf38c3b357
 
  output "codepipeline_name" {
    value       = aws_codepipeline.this.name
- }*/
+ }
 
 
 output "codepipeline_role_arn" {
