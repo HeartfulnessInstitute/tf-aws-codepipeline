@@ -148,7 +148,7 @@ resource "aws_codepipeline" "deployment_pipeline" {
     }
   }
 
-  stage {
+  /*stage {
     name = "Build"
     action {
       name             = "TerraformBuild"
@@ -163,7 +163,7 @@ resource "aws_codepipeline" "deployment_pipeline" {
         ProjectName = aws_codebuild_project.deploy_app.name
       }
     }
-  }
+  }*/
 
   stage {
     name = "Deploy"
