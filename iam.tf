@@ -196,7 +196,7 @@ resource "aws_iam_role_policy_attachment" "codebuild_logs" {
   role       = aws_iam_role.codebuild_role.name
   policy_arn = "arn:aws:iam::aws:policy/CloudWatchLogsFullAccess"
 }
-resource "aws_iam_role_policy_attachment" "s3_access" {
+resource "aws_iam_role_policy_attachment" "s3_artifacts_access" {
   role       = aws_iam_role.codepipeline_role.name
   policy_arn = "arn:aws:iam::aws:policy/AmazonS3FullAccess"
 }
