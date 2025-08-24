@@ -56,7 +56,7 @@ resource "aws_codedeploy_deployment_group" "care_app_group" {
   deployment_group_name = "${var.environment}-care-app-group"
   service_role_arn      = aws_iam_role.codedeploy_role.arn
 
-  deployment_config_name = "CodeDeployDefault.AllAtOnce"
+  deployment_config_name = "CodeDeployDefault.OneAtATime"
 
   ec2_tag_set {
     ec2_tag_filter {
