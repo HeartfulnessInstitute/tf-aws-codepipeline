@@ -60,9 +60,9 @@ resource "aws_codedeploy_deployment_group" "care_app_group" {
 
   ec2_tag_set {
     ec2_tag_filter {
-      key   = "Project"
+      key   = "Name"
       type  = "KEY_AND_VALUE"
-      value = "hfn-project"
+      value = "Care-Server"
     }
   }
 }
