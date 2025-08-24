@@ -219,3 +219,24 @@ resource "aws_iam_role_policy" "codebuild_inline" {
     ]
   })
 }
+
+resource "aws_iam_role_policy" "codedeploy_ec2_s3" {
+  name = "CodeDeploy-EC2-S3-Access"
+  role = "AmazonSSMRoleForInstancesQuickSetup" # or your EC2 instance role name
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "s3:GetObject",
+          "s3:GetObjectVersion"
+        ]
+        Resource = [
+          "arn:aws:s3:::hfn-project-dev-artifacts/*"
+        ]
+      }
+    ]
+  })
+}
