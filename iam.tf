@@ -196,3 +196,26 @@ resource "aws_iam_role_policy_attachment" "codebuild_logs_attach" {
   role       = aws_iam_role.codebuild_role.name
   policy_arn = "arn:aws:iam::aws:policy/service-role/AWSCodeBuildDeveloperAccess"
 }
+
+resource "aws_iam_role_policy" "codebuild_inline" {
+  name = "codebuild-inline-policy"
+  role = aws_iam_role.codebuild_role.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect   = "Allow"
+        Action   = [
+          "logs:CreateLogGroup",
+          "logs:CreateLogStream",
+          "logs:PutLogEvents",
+          "s3:GetObject",
+          "s3:PutObject",
+          "s3:GetBucketLocation"
+        ]
+        Resource = "*"
+      }
+    ]
+  })
+}
