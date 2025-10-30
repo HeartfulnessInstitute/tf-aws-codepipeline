@@ -71,12 +71,14 @@ resource "aws_iam_role_policy_attachment" "codebuild_additional_policies" {
 
 # CodeBuild Project
 resource "aws_codebuild_project" "this" {
-  name         = "${var.project_name}-${var.environment}-build"
-  description  = var.codebuild_description
-  service_role = aws_iam_role.codebuild_role.arn
+  name          = "${var.project_name}-${var.environment}-build"
+  description   = var.codebuild_description
+  service_role  = aws_iam_role.codebuild_role.arn
   build_timeout = var.codebuild_timeout
 
-  artifacts { type = "CODEPIPELINE" }
+  artifacts {
+    type = "CODEPIPELINE"
+  }
 
   environment {
     compute_type                = var.codebuild_compute_type
@@ -95,7 +97,10 @@ resource "aws_codebuild_project" "this" {
     }
   }
 
-  source { type = "CODEPIPELINE" buildspec = var.buildspec_file }
+  source {
+    type      = "CODEPIPELINE"
+    buildspec = var.buildspec_file
+  }
 
   dynamic "cache" {
     for_each = var.codebuild_cache_type != null ? [1] : []
@@ -113,8 +118,16 @@ resource "aws_codebuild_project" "this" {
     }
   }
 
-  tags = merge(var.common_tags, { Name = "${var.project_name}-${var.environment}-build", Project = var.project_name, Environment = var.environment })
+  tags = merge(
+    var.common_tags,
+    {
+      Name        = "${var.project_name}-${var.environment}-build"
+      Project     = var.project_name
+      Environment = var.environment
+    }
+  )
 }
+
 
 # CodePipeline IAM inline policy (references aws_iam_role.codepipeline_role from iam.tf)
 resource "aws_iam_role_policy" "codepipeline_policy" {
