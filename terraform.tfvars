@@ -1,6 +1,0 @@
-project_name   = "hfn-project"
-environment    = "dev"
-github_repo    = "hfncare"
-github_branch  = "dev"
-github_owner = "HeartfulnessInstitute"
-github_connection_arn = "arn:aws:codestar-connections:ap-south-1:502390415551:connection/0b862296-0dd7-4b96-b0bb-c5e6d6ff775e"
