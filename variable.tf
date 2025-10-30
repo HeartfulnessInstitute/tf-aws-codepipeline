@@ -3,35 +3,60 @@ variable "project_name" {
   type        = string
 }
 
-variable "github_repo" {
-  description = "GitHub repository (e.g. org/repo)"
-  type        = string
-}
-
-variable "github_branch" {
-  description = "GitHub branch to build"
-  type        = string
-  default     = "main"
-}
-
-variable "github_token" {
-  description = "GitHub OAuth token"
-  type        = string
-  sensitive   = true
-}
 variable "environment" {
-  description = "Deployment environment (e.g. dev, prod)"
+  description = "Environment name (dev, staging, prod)"
   type        = string
 }
 
-variable "github_owner" {
-  description = "Deployment environment (e.g. dev, prod)"
+variable "repository_name" {
+  description = "Name of the CodeCommit repository"
   type        = string
 }
 
-
-
-variable "github_connection_arn" {
-  description = "Deployment environment (e.g. dev, prod)"
+variable "repository_branch" {
+  description = "Branch to trigger pipeline"
   type        = string
+}
+
+variable "build_image" {
+  description = "Docker image for CodeBuild"
+  type        = string
+  default     = "aws/codebuild/standard:5.0"
+}
+
+variable "buildspec_path" {
+  description = "Path to buildspec file"
+  type        = string
+}
+
+variable "artifact_bucket_name" {
+  description = "S3 bucket name for artifacts (optional, will create if not provided)"
+  type        = string
+}
+
+variable "deploy_provider" {
+  description = "Deployment provider (S3, ECS, ElasticBeanstalk, CodeDeploy)"
+  type        = string
+}
+
+variable "deploy_config" {
+  description = "Deployment configuration map"
+  type        = map(string)
+  default     = {}
+}
+
+variable "build_environment_variables" {
+  description = "Environment variables for build stage"
+  type = list(object({
+    name  = string
+    value = string
+    type  = string
+  }))
+  default = []
+}
+
+variable "tags" {
+  description = "Tags to apply to resources"
+  type        = map(string)
+  default     = {}
 }
