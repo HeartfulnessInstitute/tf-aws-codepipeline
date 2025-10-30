@@ -1,22 +1,29 @@
+output "pipeline_id" {
+  description = "ID of the CodePipeline"
+  value       = aws_codepipeline.pipeline.id
+}
+
+output "pipeline_arn" {
+  description = "ARN of the CodePipeline"
+  value       = aws_codepipeline.pipeline.arn
+}
+
+output "pipeline_name" {
+  description = "Name of the CodePipeline"
+  value       = aws_codepipeline.pipeline.name
+}
+
+output "codebuild_project_name" {
+  description = "Name of the CodeBuild project"
+  value       = aws_codebuild_project.build.name
+}
+
 output "artifact_bucket_name" {
-  description = "S3 bucket used for storing CodePipeline artifacts"
-  value       = aws_s3_bucket.artifact_bucket.bucket
+  description = "Name of the artifact S3 bucket"
+  value       = aws_s3_bucket.artifacts.id
 }
 
-output "codepipeline_role_arn" {
-  description = "ARN of the IAM role used by CodePipeline"
-  value       = aws_iam_role.codepipeline_role.arn
+output "artifact_bucket_arn" {
+  description = "ARN of the artifact S3 bucket"
+  value       = aws_s3_bucket.artifacts.arn
 }
-
-output "codebuild_role_arn" {
-  description = "ARN of the IAM role used by CodeBuild"
-  value       = aws_iam_role.codebuild_role.arn
-}
-
-
-
-
-
-
-
-
