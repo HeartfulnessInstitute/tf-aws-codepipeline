@@ -36,11 +36,6 @@ variable "privileged_mode" {
   type    = bool
   default = true
 }
-
-variable "tags" {
-  type    = map(string)
-  default = {}
-}
 variable "codedeploy_role_arn" { 
 type = string
 }
