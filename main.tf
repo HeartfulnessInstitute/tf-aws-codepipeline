@@ -1,179 +1,150 @@
-locals {
-  pipeline_name        = "${var.project_name}-${var.environment}-pipeline"
-  codebuild_name       = "${var.project_name}-${var.environment}-build"
-  artifact_bucket_name = var.artifact_bucket_name != "" ? var.artifact_bucket_name : "${var.project_name}-${var.environment}-artifacts-${data.aws_caller_identity.current.account_id}"
-  
-  common_tags = merge(
-    var.tags,
-    {
-      Project     = var.project_name
-      Environment = var.environment
-      ManagedBy   = "Terraform"
-    }
-  )
+provider "aws" {
+  region = var.region
 }
 
-data "aws_caller_identity" "current" {}
-data "aws_region" "current" {}
-
-# S3 Bucket for Pipeline Artifacts
-resource "aws_s3_bucket" "artifacts" {
-  bucket = local.artifact_bucket_name
-  tags   = local.common_tags
+data "aws_secretsmanager_secret_version" "github_token" {
+  secret_id = "github-oauth-token"
 }
 
-resource "aws_s3_bucket_versioning" "artifacts" {
-  bucket = aws_s3_bucket.artifacts.id
-  versioning_configuration {
-    status = "Enabled"
+resource "aws_s3_bucket" "artifact_bucket" {
+  bucket        = "${var.project_name}-${var.environment}-artifacts"
+  force_destroy = false
+
+  tags = {
+    Project     = var.project_name
+    Environment = var.environment
   }
 }
 
-resource "aws_s3_bucket_server_side_encryption_configuration" "artifacts" {
-  bucket = aws_s3_bucket.artifacts.id
-
-  rule {
-    apply_server_side_encryption_by_default {
-      sse_algorithm = "AES256"
-    }
-  }
-}
-
-# IAM Role for CodePipeline
-resource "aws_iam_role" "codepipeline" {
-  name = "${local.pipeline_name}-role"
+/*resource "aws_iam_role" "codebuild_role" {
+  name = "${var.project_name}-${var.environment}-codebuild-role"
 
   assume_role_policy = jsonencode({
-    Version = "2012-10-17"
+    Version = "2012-10-17",
     Statement = [{
-      Action = "sts:AssumeRole"
-      Effect = "Allow"
-      Principal = {
-        Service = "codepipeline.amazonaws.com"
-      }
-    }]
-  })
-
-  tags = local.common_tags
-}
-
-resource "aws_iam_role_policy" "codepipeline" {
-  name = "${local.pipeline_name}-policy"
-  role = aws_iam_role.codepipeline.id
-
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Effect = "Allow"
-        Action = [
-          "s3:GetObject",
-          "s3:GetObjectVersion",
-          "s3:PutObject",
-          "s3:GetBucketLocation",
-          "s3:ListBucket"
-        ]
-        Resource = [
-          aws_s3_bucket.artifacts.arn,
-          "${aws_s3_bucket.artifacts.arn}/*"
-        ]
-      },
-      {
-        Effect = "Allow"
-        Action = [
-          "codecommit:GetBranch",
-          "codecommit:GetCommit",
-          "codecommit:UploadArchive",
-          "codecommit:GetUploadArchiveStatus"
-        ]
-        Resource = "arn:aws:codecommit:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:${var.repository_name}"
-      },
-      {
-        Effect = "Allow"
-        Action = [
-          "codebuild:BatchGetBuilds",
-          "codebuild:StartBuild"
-        ]
-        Resource = aws_codebuild_project.build.arn
-      },
-      {
-        Effect = "Allow"
-        Action = [
-          "codedeploy:CreateDeployment",
-          "codedeploy:GetApplication",
-          "codedeploy:GetApplicationRevision",
-          "codedeploy:GetDeployment",
-          "codedeploy:GetDeploymentConfig",
-          "codedeploy:RegisterApplicationRevision"
-        ]
-        Resource = "*"
-      }
-    ]
-  })
-}
-
-# IAM Role for CodeBuild
-resource "aws_iam_role" "codebuild" {
-  name = "${local.codebuild_name}-role"
-
-  assume_role_policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [{
-      Action = "sts:AssumeRole"
-      Effect = "Allow"
+      Action    = "sts:AssumeRole",
+      Effect    = "Allow",
       Principal = {
         Service = "codebuild.amazonaws.com"
       }
     }]
   })
+}*/
 
-  tags = local.common_tags
+resource "aws_iam_role_policy_attachment" "codebuild_policy" {
+  role       = aws_iam_role.codebuild_role.name
+  policy_arn = "arn:aws:iam::aws:policy/AWSCodeBuildDeveloperAccess"
 }
 
-resource "aws_iam_role_policy" "codebuild" {
-  name = "${local.codebuild_name}-policy"
-  role = aws_iam_role.codebuild.id
+resource "aws_codebuild_project" "this" {
+  name         = "${var.project_name}-${var.environment}-build"
+  service_role = aws_iam_role.codebuild_role.arn
 
+  artifacts {
+    type = "CODEPIPELINE"
+  }
+
+  environment {
+    compute_type    = "BUILD_GENERAL1_SMALL"
+    image           = "aws/codebuild/standard:5.0"
+    type            = "LINUX_CONTAINER"
+    privileged_mode = true
+  }
+
+  source {
+    type      = "CODEPIPELINE"
+    buildspec = "buildspec.yml"
+  }
+
+  tags = {
+    Project     = var.project_name
+    Environment = var.environment
+  }
+}
+
+resource "aws_iam_role" "codepipeline_role" {
+  name = "${var.project_name}-${var.environment}-pipeline-role"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17",
+    Statement = [{
+      Action    = "sts:AssumeRole",
+      Effect    = "Allow",
+      Principal = {
+        Service = "codepipeline.amazonaws.com"
+      }
+    }]
+  })
+}
+resource "aws_iam_role_policy" "codepipeline_use_connection" {
+  name = "AllowUseCodeStarConnection"
+  role = aws_iam_role.codepipeline_role.id
   policy = jsonencode({
+    Version = "2012-10-17",
+    Statement = [{
+      Effect   = "Allow",
+      # include both namespaces to be safe during service rename
+      Action   = [
+        "codestar-connections:UseConnection",
+        "codeconnections:UseConnection"
+      ],
+      Resource = var.codestar_connection_arn
+    }]
+  })
+}
+
+resource "aws_iam_role" "codedeploy_role" {
+  name = "${var.environment}-codedeploy-role"
+
+  assume_role_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
       {
         Effect = "Allow"
-        Action = [
-          "logs:CreateLogGroup",
-          "logs:CreateLogStream",
-          "logs:PutLogEvents"
-        ]
-        Resource = "arn:aws:logs:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:log-group:/aws/codebuild/${local.codebuild_name}*"
-      },
-      {
-        Effect = "Allow"
-        Action = [
-          "s3:GetObject",
-          "s3:GetObjectVersion",
-          "s3:PutObject"
-        ]
-        Resource = [
-          aws_s3_bucket.artifacts.arn,
-          "${aws_s3_bucket.artifacts.arn}/*"
-        ]
-      },
-      {
-        Effect = "Allow"
-        Action = [
-          "codecommit:GitPull"
-        ]
-        Resource = "arn:aws:codecommit:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:${var.repository_name}"
+        Principal = {
+          Service = "codedeploy.amazonaws.com"
+        }
+        Action = "sts:AssumeRole"
       }
     ]
   })
 }
 
-# CodeBuild Project
-resource "aws_codebuild_project" "build" {
-  name          = local.codebuild_name
-  service_role  = aws_iam_role.codebuild.arn
-  build_timeout = 60
+resource "aws_iam_role_policy_attachment" "codedeploy_role_attach" {
+  role       = aws_iam_role.codedeploy_role.name
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AWSCodeDeployRole"
+}
+
+# Minimum permissions for CodePipeline
+resource "aws_iam_role_policy_attachment" "codepipeline_access" {
+  role       = aws_iam_role.codepipeline_role.name
+  policy_arn = "arn:aws:iam::aws:policy/AWSCodePipeline_FullAccess"
+}
+
+# Needed for S3 artifact access
+resource "aws_iam_role_policy_attachment" "s3_access" {
+  role       = aws_iam_role.codepipeline_role.name
+  policy_arn = "arn:aws:iam::aws:policy/AmazonS3FullAccess"
+}
+
+# (Optional) If using CodeBuild
+resource "aws_iam_role_policy_attachment" "codebuild_access" {
+  role       = aws_iam_role.codepipeline_role.name
+  policy_arn = "arn:aws:iam::aws:policy/AWSCodeBuildDeveloperAccess"
+}
+
+# (Optional) If using CodeDeploy
+resource "aws_iam_role_policy_attachment" "codedeploy_access" {
+  role       = aws_iam_role.codepipeline_role.name
+  policy_arn = "arn:aws:iam::aws:policy/AWSCodeDeployFullAccess"
+}
+
+
+resource "aws_codebuild_project" "terraform_build" {
+  name          = "${var.environment}-terraform-build"
+  description   = "Build project for ${var.environment} environment"
+  service_role  = aws_iam_role.codebuild_role.arn
+  build_timeout = 30
 
   artifacts {
     type = "CODEPIPELINE"
@@ -181,36 +152,48 @@ resource "aws_codebuild_project" "build" {
 
   environment {
     compute_type                = "BUILD_GENERAL1_SMALL"
-    image                       = var.build_image
+    image                       = "aws/codebuild/standard:6.0" # Amazon Linux 2 standard
     type                        = "LINUX_CONTAINER"
-    image_pull_credentials_type = "CODEBUILD"
     privileged_mode             = true
-
-    dynamic "environment_variable" {
-      for_each = var.build_environment_variables
-      content {
-        name  = environment_variable.value.name
-        value = environment_variable.value.value
-        type  = environment_variable.value.type
-      }
-    }
   }
 
   source {
     type      = "CODEPIPELINE"
-    buildspec = var.buildspec_path
+    buildspec = "buildspec.yml"
   }
 
-  tags = local.common_tags
+  tags = {
+    Environment = var.environment
+  }
 }
 
-# CodePipeline
-resource "aws_codepipeline" "pipeline" {
-  name     = local.pipeline_name
-  role_arn = aws_iam_role.codepipeline.arn
+resource "aws_codedeploy_app" "care_app" {
+  name             = "${var.environment}-care-app"
+  compute_platform = "Server" # or "ECS" if containerized
+}
+
+resource "aws_codedeploy_deployment_group" "care_app_group" {
+  app_name              = aws_codedeploy_app.care_app.name
+  deployment_group_name = "${var.environment}-care-app-group"
+  service_role_arn      = aws_iam_role.codedeploy_role.arn
+
+  deployment_config_name = "CodeDeployDefault.AllAtOnce"
+
+  ec2_tag_set {
+    ec2_tag_filter {
+      key   = "project"
+      type  = "KEY_AND_VALUE"
+      value = "StageCareServer"
+    }
+  }
+}
+
+resource "aws_codepipeline" "deployment_pipeline" {
+  name     = "${var.environment}-deployment-pipeline"
+  role_arn = aws_iam_role.codepipeline_role.arn
 
   artifact_store {
-    location = aws_s3_bucket.artifacts.bucket
+    location = aws_s3_bucket.artifact_bucket.bucket
     type     = "S3"
   }
 
@@ -218,26 +201,25 @@ resource "aws_codepipeline" "pipeline" {
     name = "Source"
 
     action {
-      name             = "Source"
+      name             = "GitHubSource"
       category         = "Source"
       owner            = "AWS"
-      provider         = "CodeCommit"
+      provider         = "CodeStarSourceConnection"
       version          = "1"
       output_artifacts = ["source_output"]
 
       configuration = {
-        RepositoryName       = var.repository_name
-        BranchName           = var.repository_branch
-        PollForSourceChanges = false
+        ConnectionArn    = var.github_connection_arn
+        FullRepositoryId = "${var.github_owner}/${var.github_repo}"
+        BranchName       = var.github_branch
       }
     }
   }
 
   stage {
     name = "Build"
-
     action {
-      name             = "Build"
+      name             = "TerraformBuild"
       category         = "Build"
       owner            = "AWS"
       provider         = "CodeBuild"
@@ -246,88 +228,30 @@ resource "aws_codepipeline" "pipeline" {
       output_artifacts = ["build_output"]
 
       configuration = {
-        ProjectName = aws_codebuild_project.build.name
+        ProjectName = aws_codebuild_project.terraform_build.name
       }
     }
   }
 
-  dynamic "stage" {
-    for_each = var.deploy_provider != "" ? [1] : []
-    content {
-      name = "Deploy"
+  stage {
+    name = "Deploy"
 
-      action {
-        name            = "Deploy"
-        category        = "Deploy"
-        owner           = "AWS"
-        provider        = var.deploy_provider
-        version         = "1"
-        input_artifacts = ["build_output"]
+    action {
+      name             = "CodeDeploy"
+      category         = "Deploy"
+      owner            = "AWS"
+      provider         = "CodeDeploy"
+      version          = "1"
+      input_artifacts  = ["build_output"]
 
-        configuration = var.deploy_config
+      configuration = {
+        ApplicationName     = aws_codedeploy_app.care_app.name
+        DeploymentGroupName = aws_codedeploy_deployment_group.care_app_group.deployment_group_name
       }
     }
   }
 
-  tags = local.common_tags
-}
-
-# CloudWatch Event Rule for automatic trigger
-resource "aws_cloudwatch_event_rule" "pipeline_trigger" {
-  name        = "${local.pipeline_name}-trigger"
-  description = "Trigger pipeline on repository changes"
-
-  event_pattern = jsonencode({
-    source      = ["aws.codecommit"]
-    detail-type = ["CodeCommit Repository State Change"]
-    detail = {
-      event         = ["referenceCreated", "referenceUpdated"]
-      referenceType = ["branch"]
-      referenceName = [var.repository_branch]
-    }
-    resources = ["arn:aws:codecommit:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:${var.repository_name}"]
-  })
-
-  tags = local.common_tags
-}
-
-resource "aws_cloudwatch_event_target" "pipeline" {
-  rule      = aws_cloudwatch_event_rule.pipeline_trigger.name
-  target_id = "codepipeline"
-  arn       = aws_codepipeline.pipeline.arn
-  role_arn  = aws_iam_role.cloudwatch_events.arn
-}
-
-# IAM Role for CloudWatch Events
-resource "aws_iam_role" "cloudwatch_events" {
-  name = "${local.pipeline_name}-events-role"
-
-  assume_role_policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [{
-      Action = "sts:AssumeRole"
-      Effect = "Allow"
-      Principal = {
-        Service = "events.amazonaws.com"
-      }
-    }]
-  })
-
-  tags = local.common_tags
-}
-
-resource "aws_iam_role_policy" "cloudwatch_events" {
-  name = "${local.pipeline_name}-events-policy"
-  role = aws_iam_role.cloudwatch_events.id
-
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [{
-      Effect = "Allow"
-      Action = [
-        "codepipeline:StartPipelineExecution"
-      ]
-      Resource = aws_codepipeline.pipeline.arn
-    }]
-  })
+  tags = {
+    Environment = var.environment
+  }
 }
