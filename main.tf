@@ -1,6 +1,5 @@
-# modules/cicd-pipeline/main.tf
 provider "aws" {
-  region  = var.region
+  region = var.region
 }
 
 # S3 Bucket for Pipeline Artifacts
@@ -21,36 +20,10 @@ resource "aws_s3_bucket" "artifact_bucket" {
 resource "aws_s3_bucket_versioning" "artifact_bucket" {
   bucket = aws_s3_bucket.artifact_bucket.id
 
-  versioning_configuration {
-    status = "Enabled"
-  }
+  versioning_configuration { status = "Enabled" }
 }
 
-# CodeBuild IAM Role
-resource "aws_iam_role" "codebuild_role" {
-  name = "${var.project_name}-${var.environment}-codebuild-role"
-
-  assume_role_policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [{
-      Action = "sts:AssumeRole"
-      Effect = "Allow"
-      Principal = {
-        Service = "codebuild.amazonaws.com"
-      }
-    }]
-  })
-
-  tags = merge(
-    var.common_tags,
-    {
-      Name        = "${var.project_name}-${var.environment}-codebuild-role"
-      Environment = var.environment
-    }
-  )
-}
-
-# CodeBuild IAM Policy
+# CodeBuild IAM inline policy (references aws_iam_role.codebuild_role from iam.tf)
 resource "aws_iam_role_policy" "codebuild_policy" {
   name = "${var.project_name}-${var.environment}-codebuild-policy"
   role = aws_iam_role.codebuild_role.id
@@ -78,40 +51,32 @@ resource "aws_iam_role_policy" "codebuild_policy" {
       },
       {
         Effect = "Allow"
-        Action = [
-          "s3:ListBucket"
-        ]
+        Action = [ "s3:ListBucket" ]
         Resource = aws_s3_bucket.artifact_bucket.arn
       },
       {
         Effect = "Allow"
-        Action = [
-          "secretsmanager:GetSecretValue"
-        ]
+        Action = [ "secretsmanager:GetSecretValue" ]
         Resource = var.secrets_manager_arns
       }
     ]
   })
 }
 
-# Attach additional policies to CodeBuild role if provided
 resource "aws_iam_role_policy_attachment" "codebuild_additional_policies" {
   for_each = toset(var.codebuild_additional_policy_arns)
-
-  role       = aws_iam_role.codebuild_role.name
+  role     = aws_iam_role.codebuild_role.name
   policy_arn = each.value
 }
 
 # CodeBuild Project
 resource "aws_codebuild_project" "this" {
-  name          = "${var.project_name}-${var.environment}-build"
-  description   = var.codebuild_description
-  service_role  = aws_iam_role.codebuild_role.arn
+  name         = "${var.project_name}-${var.environment}-build"
+  description  = var.codebuild_description
+  service_role = aws_iam_role.codebuild_role.arn
   build_timeout = var.codebuild_timeout
 
-  artifacts {
-    type = "CODEPIPELINE"
-  }
+  artifacts { type = "CODEPIPELINE" }
 
   environment {
     compute_type                = var.codebuild_compute_type
@@ -130,10 +95,7 @@ resource "aws_codebuild_project" "this" {
     }
   }
 
-  source {
-    type      = "CODEPIPELINE"
-    buildspec = var.buildspec_file
-  }
+  source { type = "CODEPIPELINE" buildspec = var.buildspec_file }
 
   dynamic "cache" {
     for_each = var.codebuild_cache_type != null ? [1] : []
@@ -151,41 +113,10 @@ resource "aws_codebuild_project" "this" {
     }
   }
 
-  tags = merge(
-    var.common_tags,
-    {
-      Name        = "${var.project_name}-${var.environment}-build"
-      Project     = var.project_name
-      Environment = var.environment
-    }
-  )
+  tags = merge(var.common_tags, { Name = "${var.project_name}-${var.environment}-build", Project = var.project_name, Environment = var.environment })
 }
 
-# CodePipeline IAM Role
-resource "aws_iam_role" "codepipeline_role" {
-  name = "${var.project_name}-${var.environment}-pipeline-role"
-
-  assume_role_policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [{
-      Action = "sts:AssumeRole"
-      Effect = "Allow"
-      Principal = {
-        Service = "codepipeline.amazonaws.com"
-      }
-    }]
-  })
-
-  tags = merge(
-    var.common_tags,
-    {
-      Name        = "${var.project_name}-${var.environment}-pipeline-role"
-      Environment = var.environment
-    }
-  )
-}
-
-# CodePipeline IAM Policy
+# CodePipeline IAM inline policy (references aws_iam_role.codepipeline_role from iam.tf)
 resource "aws_iam_role_policy" "codepipeline_policy" {
   name = "${var.project_name}-${var.environment}-pipeline-policy"
   role = aws_iam_role.codepipeline_role.id
@@ -226,37 +157,7 @@ resource "aws_iam_role_policy" "codepipeline_policy" {
   })
 }
 
-# CodeDeploy resources 
-resource "aws_iam_role" "codedeploy_role" {
-  count = var.enable_codedeploy ? 1 : 0
-  name  = "${var.project_name}-${var.environment}-codedeploy-role"
-
-  assume_role_policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [{
-      Effect = "Allow"
-      Principal = {
-        Service = "codedeploy.amazonaws.com"
-      }
-      Action = "sts:AssumeRole"
-    }]
-  })
-
-  tags = merge(
-    var.common_tags,
-    {
-      Name        = "${var.project_name}-${var.environment}-codedeploy-role"
-      Environment = var.environment
-    }
-  )
-}
-
-resource "aws_iam_role_policy_attachment" "codedeploy_role_attach" {
-  count      = var.enable_codedeploy ? 1 : 0
-  role       = aws_iam_role.codedeploy_role[0].name
-  policy_arn = "arn:aws:iam::aws:policy/service-role/AWSCodeDeployRole"
-}
-
+# CodeDeploy inline policy and resources (rely on codedeploy_role in iam.tf if enabled)
 resource "aws_iam_role_policy" "codedeploy_additional_policy" {
   count = var.enable_codedeploy ? 1 : 0
   name  = "${var.project_name}-${var.environment}-codedeploy-additional-policy"
@@ -284,13 +185,7 @@ resource "aws_codedeploy_app" "this" {
   name             = "${var.project_name}-${var.environment}-app"
   compute_platform = var.codedeploy_compute_platform
 
-  tags = merge(
-    var.common_tags,
-    {
-      Name        = "${var.project_name}-${var.environment}-app"
-      Environment = var.environment
-    }
-  )
+  tags = merge(var.common_tags, { Name = "${var.project_name}-${var.environment}-app", Environment = var.environment })
 }
 
 resource "aws_codedeploy_deployment_group" "this" {
@@ -333,10 +228,8 @@ resource "aws_codepipeline" "this" {
     type     = "S3"
   }
 
-  # Source Stage
   stage {
     name = "Source"
-
     action {
       name             = "Source"
       category         = "Source"
@@ -346,18 +239,16 @@ resource "aws_codepipeline" "this" {
       output_artifacts = ["source_output"]
 
       configuration = {
-        ConnectionArn    = var.codestar_connection_arn
-        FullRepositoryId = "${var.github_owner}/${var.github_repo}"
-        BranchName       = var.github_branch
-        OutputArtifactFormat = var.source_output_artifact_format
+        ConnectionArn         = var.codestar_connection_arn
+        FullRepositoryId      = "${var.github_owner}/${var.github_repo}"
+        BranchName            = var.github_branch
+        OutputArtifactFormat  = var.source_output_artifact_format
       }
     }
   }
 
-  # Build Stage
   stage {
     name = "Build"
-
     action {
       name             = "Build"
       category         = "Build"
@@ -367,18 +258,14 @@ resource "aws_codepipeline" "this" {
       input_artifacts  = ["source_output"]
       output_artifacts = ["build_output"]
 
-      configuration = {
-        ProjectName = aws_codebuild_project.this.name
-      }
+      configuration = { ProjectName = aws_codebuild_project.this.name }
     }
   }
 
-  # Deploy Stage 
   dynamic "stage" {
     for_each = var.enable_codedeploy ? [1] : []
     content {
       name = "Deploy"
-
       action {
         name            = "Deploy"
         category        = "Deploy"
@@ -394,5 +281,4 @@ resource "aws_codepipeline" "this" {
       }
     }
   }
-
 }
