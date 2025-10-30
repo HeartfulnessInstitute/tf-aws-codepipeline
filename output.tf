@@ -1,3 +1,4 @@
+
 output "pipeline_id" {
   description = "ID of the CodePipeline"
   value       = aws_codepipeline.pipeline.id
