@@ -63,11 +63,14 @@ locals {
             "codedeploy:GetDeploymentConfig",
             "codedeploy:List*"
           ]
-          Resource = length(concat(var.codedeploy_application_arns, var.codedeploy_deploymentgroup_arns)) == 0 ?
-            ["arn:aws:codedeploy:${local.region}:${local.account_id}:deploymentconfig:*"] :
-            concat(var.codedeploy_application_arns, var.codedeploy_deploymentgroup_arns, [
-              "arn:aws:codedeploy:${local.region}:${local.account_id}:deploymentconfig:*"
-            ])
+         Resource = length(concat(var.codedeploy_application_arns, var.codedeploy_deploymentgroup_arns)) == 0 ?
+  [format("arn:aws:codedeploy:%s:%s:deploymentconfig:*", local.region, local.account_id)] :
+  concat(
+    var.codedeploy_application_arns,
+    var.codedeploy_deploymentgroup_arns,
+    [format("arn:aws:codedeploy:%s:%s:deploymentconfig:*", local.region, local.account_id)]
+  )
+
         },
         {
           Sid    = "AllowEC2AccessForDeployments"
