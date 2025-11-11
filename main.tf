@@ -1,4 +1,3 @@
-
 # --------------------------
 # Data & locals
 # --------------------------
@@ -9,7 +8,7 @@ locals {
   account_id = data.aws_caller_identity.current.account_id
   region     = var.region != "" ? var.region : data.aws_region.current.name
 
-  # If role ARNs are provided, extract role name by splitting on '/'
+  # Extract role names from ARNs
   role_names_from_arns = [
     for arn in var.role_arns :
     (
@@ -17,21 +16,25 @@ locals {
     )
   ]
 
-  # Combine explicit role_names and ones derived from role_arns (de-duplicated)
+  # Merge and deduplicate all role names
   all_role_names_map = {
     for n in distinct(concat(var.role_names, local.role_names_from_arns)) : n => n
   }
 
-  # codedeploy resource list helper (avoid inline ternary in big json)
-  codedeploy_resource_list = length(concat(var.codedeploy_application_arns, var.codedeploy_deploymentgroup_arns)) == 0 ?
-    [format("arn:aws:codedeploy:%s:%s:deploymentconfig:*", local.region, local.account_id)] :
-    concat(
-      var.codedeploy_application_arns,
-      var.codedeploy_deploymentgroup_arns,
-      [format("arn:aws:codedeploy:%s:%s:deploymentconfig:*", local.region, local.account_id)]
-    )
+  # --------------------------
+  # Helper: CodeDeploy resource list
+  # --------------------------
+  codedeploy_resource_list = length(concat(var.codedeploy_application_arns, var.codedeploy_deploymentgroup_arns)) == 0 ? [
+    format("arn:aws:codedeploy:%s:%s:deploymentconfig:*", local.region, local.account_id)
+  ] : concat(
+    var.codedeploy_application_arns,
+    var.codedeploy_deploymentgroup_arns,
+    [format("arn:aws:codedeploy:%s:%s:deploymentconfig:*", local.region, local.account_id)]
+  )
 
-  # Build policy document
+  # --------------------------
+  # Policy JSON definition
+  # --------------------------
   policy = {
     Version = "2012-10-17"
     Statement = concat(
@@ -61,9 +64,9 @@ locals {
           ]
         },
         {
-          Sid    = "AllowCodeDeployActions"
-          Effect = "Allow"
-          Action = [
+          Sid      = "AllowCodeDeployActions"
+          Effect   = "Allow"
+          Action   = [
             "codedeploy:CreateDeployment",
             "codedeploy:GetDeployment",
             "codedeploy:RegisterApplicationRevision",
@@ -95,23 +98,6 @@ locals {
           Resource = "*"
         },
         {
-          Sid    = "AllowAutoScalingAccess"
-          Effect = "Allow"
-          Action = [
-            "autoscaling:DescribeAutoScalingGroups",
-            "autoscaling:DescribeAutoScalingInstances",
-            "autoscaling:UpdateAutoScalingGroup",
-            "autoscaling:CompleteLifecycleAction",
-            "autoscaling:RecordLifecycleActionHeartbeat",
-            "autoscaling:PutLifecycleHook",
-            "autoscaling:DeleteLifecycleHook",
-            "autoscaling:DescribeLifecycleHooks",
-            "autoscaling:SuspendProcesses",
-            "autoscaling:ResumeProcesses"
-          ]
-          Resource = "*"
-        },
-        {
           Sid    = "AllowCloudWatchAndLogs"
           Effect = "Allow"
           Action = [
@@ -123,25 +109,6 @@ locals {
           Resource = "*"
         },
         {
-          Sid    = "AllowS3AccessForDeployments"
-          Effect = "Allow"
-          Action = [
-            "s3:Get*",
-            "s3:List*"
-          ]
-          Resource = "*"
-        },
-        {
-          Sid    = "AllowTaggingResources"
-          Effect = "Allow"
-          Action = [
-            "tag:GetResources",
-            "tag:GetTagKeys",
-            "tag:GetTagValues"
-          ]
-          Resource = "*"
-        },
-        {
           Sid    = "AllowIAMPassRole"
           Effect = "Allow"
           Action = "iam:PassRole"
@@ -149,7 +116,6 @@ locals {
         }
       ],
       [
-        # Additional statements merged in
         {
           Sid    = "AllowCodeDeployCoreActions"
           Effect = "Allow"
@@ -158,44 +124,9 @@ locals {
             "codedeploy:GetDeployment",
             "codedeploy:RegisterApplicationRevision",
             "codedeploy:GetApplication",
-            "codedeploy:GetApplicationRevision",
             "codedeploy:GetDeploymentGroup",
             "codedeploy:GetDeploymentConfig",
             "codedeploy:List*"
-          ]
-          Resource = "*"
-        },
-        {
-          Sid    = "AllowEC2AndAutoScalingAccess"
-          Effect = "Allow"
-          Action = [
-            "ec2:DescribeInstances",
-            "ec2:DescribeInstanceStatus",
-            "ec2:DescribeTags",
-            "ec2:DescribeInstanceAttribute",
-            "ec2:DescribeImages",
-            "ec2:DescribeKeyPairs",
-            "ec2:DescribeSecurityGroups",
-            "ec2:DescribeSubnets",
-            "ec2:DescribeVpcs",
-            "ec2:DescribeNetworkInterfaces",
-            "ec2:DescribeAvailabilityZones",
-            "ec2:GetConsoleOutput",
-            "ec2:DescribeAddresses",
-            "autoscaling:DescribeAutoScalingGroups",
-            "autoscaling:DescribeAutoScalingInstances",
-            "autoscaling:DescribeLifecycleHooks",
-            "autoscaling:UpdateAutoScalingGroup",
-            "autoscaling:CompleteLifecycleAction",
-            "autoscaling:RecordLifecycleActionHeartbeat",
-            "autoscaling:PutLifecycleHook",
-            "autoscaling:DeleteLifecycleHook",
-            "autoscaling:SuspendProcesses",
-            "autoscaling:ResumeProcesses",
-            "autoscaling:AttachLoadBalancers",
-            "autoscaling:DetachLoadBalancers",
-            "autoscaling:AttachLoadBalancerTargetGroups",
-            "autoscaling:DetachLoadBalancerTargetGroups"
           ]
           Resource = "*"
         },
@@ -211,37 +142,6 @@ locals {
             "elasticloadbalancing:DescribeListeners"
           ]
           Resource = "*"
-        },
-        {
-          Sid    = "AllowCloudWatchAndLogs_2"
-          Effect = "Allow"
-          Action = [
-            "cloudwatch:PutMetricData",
-            "logs:CreateLogGroup",
-            "logs:CreateLogStream",
-            "logs:PutLogEvents"
-          ]
-          Resource = "*"
-        },
-        {
-          Sid    = "AllowS3AccessForAppRevisions"
-          Effect = "Allow"
-          Action = [
-            "s3:Get*",
-            "s3:List*"
-          ]
-          Resource = "*"
-        },
-        {
-          Sid    = "AllowTaggingAndPassRole"
-          Effect = "Allow"
-          Action = [
-            "tag:GetResources",
-            "tag:GetTagKeys",
-            "tag:GetTagValues",
-            "iam:PassRole"
-          ]
-          Resource = "*"
         }
       ]
     )
@@ -249,7 +149,7 @@ locals {
 }
 
 # --------------------------
-# IAM policy resource + attachments
+# IAM Policy + Attachments
 # --------------------------
 resource "aws_iam_policy" "this" {
   name        = "${var.environment != "" ? var.environment : "default"}-${var.project_name}-policy"
@@ -258,7 +158,6 @@ resource "aws_iam_policy" "this" {
   tags        = var.tags
 }
 
-# Attach to roles passed in variable.role_names or derived from role_arns
 resource "aws_iam_role_policy_attachment" "attachments_by_name" {
   for_each   = local.all_role_names_map
   role       = each.value
@@ -266,7 +165,7 @@ resource "aws_iam_role_policy_attachment" "attachments_by_name" {
 }
 
 # --------------------------
-# CodeBuild projects
+# CodeBuild Projects
 # --------------------------
 resource "aws_codebuild_project" "main_build" {
   name         = "${var.project_name}-${var.environment}-build"
@@ -281,6 +180,7 @@ resource "aws_codebuild_project" "main_build" {
     image           = var.image
     type            = "LINUX_CONTAINER"
     privileged_mode = var.privileged_mode
+
     environment_variable {
       name  = "ENVIRONMENT"
       value = var.environment
@@ -297,7 +197,7 @@ resource "aws_codebuild_project" "main_build" {
 
 resource "aws_codebuild_project" "terraform_build" {
   name          = "${var.environment}-terraform-build"
-  description   = "Build project for ${var.environment} environment"
+  description   = "Terraform build for ${var.environment}"
   service_role  = var.codebuild_role_arn
   build_timeout = var.build_timeout
 
@@ -321,20 +221,18 @@ resource "aws_codebuild_project" "terraform_build" {
 }
 
 # --------------------------
-# CodeDeploy app + deployment group
+# CodeDeploy
 # --------------------------
 resource "aws_codedeploy_app" "donation_app" {
   name             = "${var.environment}-${var.project_name}-donation-app"
   compute_platform = "Server"
-
-  tags = var.tags
+  tags             = var.tags
 }
 
 resource "aws_codedeploy_deployment_group" "donation_app_group" {
   app_name              = aws_codedeploy_app.donation_app.name
   deployment_group_name = "${var.environment}-${var.project_name}-donation-app-group"
   service_role_arn      = var.codedeploy_role_arn
-
   deployment_config_name = var.deployment_config_name
 
   ec2_tag_set {
@@ -352,7 +250,7 @@ resource "aws_codedeploy_deployment_group" "donation_app_group" {
 # CodePipeline
 # --------------------------
 resource "aws_codepipeline" "deployment_pipeline" {
-  name     = "${var.environment}-${var.project_name}-deployment-pipeline"
+  name     = "${var.environment}-${var.project_name}-pipeline"
   role_arn = var.codepipeline_role_arn
 
   artifact_store {
@@ -362,7 +260,6 @@ resource "aws_codepipeline" "deployment_pipeline" {
 
   stage {
     name = "Source"
-
     action {
       name             = "GitHubSource"
       category         = "Source"
@@ -370,7 +267,6 @@ resource "aws_codepipeline" "deployment_pipeline" {
       provider         = "CodeStarSourceConnection"
       version          = "1"
       output_artifacts = ["source_output"]
-
       configuration = {
         ConnectionArn    = var.github_connection_arn
         FullRepositoryId = "${var.github_owner}/${var.github_repo}"
@@ -381,7 +277,6 @@ resource "aws_codepipeline" "deployment_pipeline" {
 
   stage {
     name = "Build"
-
     action {
       name             = "TerraformBuild"
       category         = "Build"
@@ -390,7 +285,6 @@ resource "aws_codepipeline" "deployment_pipeline" {
       version          = "1"
       input_artifacts  = ["source_output"]
       output_artifacts = ["build_output"]
-
       configuration = {
         ProjectName = var.codebuild_project_name
       }
@@ -399,7 +293,6 @@ resource "aws_codepipeline" "deployment_pipeline" {
 
   stage {
     name = "Deploy"
-
     action {
       name             = "CodeDeploy"
       category         = "Deploy"
@@ -407,7 +300,6 @@ resource "aws_codepipeline" "deployment_pipeline" {
       provider         = "CodeDeploy"
       version          = "1"
       input_artifacts  = ["build_output"]
-
       configuration = {
         ApplicationName     = var.codedeploy_app_name
         DeploymentGroupName = var.codedeploy_group_name
@@ -419,7 +311,7 @@ resource "aws_codepipeline" "deployment_pipeline" {
 }
 
 # --------------------------
-# S3 bucket policy to allow pipeline role to PutObject (resource-based)
+# S3 Bucket Policy (allow CodePipeline to put artifacts)
 # --------------------------
 data "aws_iam_policy_document" "bucket_policy" {
   statement {
@@ -452,9 +344,7 @@ data "aws_iam_policy_document" "bucket_policy" {
       identifiers = [var.codepipeline_role_arn]
     }
 
-    actions = [
-      "s3:ListBucket"
-    ]
+    actions = ["s3:ListBucket"]
 
     resources = [
       format("arn:aws:s3:::%s", var.artifact_bucket_name)
