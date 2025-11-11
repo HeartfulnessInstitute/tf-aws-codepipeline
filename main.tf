@@ -411,5 +411,50 @@ resource "aws_codepipeline" "deployment_pipeline" {
 
   tags = var.tags
 }
+data "aws_iam_policy_document" "bucket_policy" {
+  statement {
+    sid = "AllowCodePipelinePutObject"
+    effect = "Allow"
+
+    principals {
+      type        = "AWS"
+      identifiers = [var.codepipeline_role_arn]   # the role ARN that assumes the pipeline
+    }
+
+    actions = [
+      "s3:PutObject",
+      "s3:GetObject",
+      "s3:GetObjectVersion",
+      "s3:DeleteObject"
+    ]
+
+    resources = [
+      "arn:aws:s3:::${var.artifact_bucket_name}/*"
+    ]
+  }
+
+  statement {
+    sid = "AllowCodePipelineListBucket"
+    effect = "Allow"
+
+    principals {
+      type        = "AWS"
+      identifiers = [var.codepipeline_role_arn]
+    }
+
+    actions = [
+      "s3:ListBucket"
+    ]
+
+    resources = [
+      "arn:aws:s3:::${var.artifact_bucket_name}"
+    ]
+  }
+}
+
+resource "aws_s3_bucket_policy" "artifact_bucket_policy" {
+  bucket = var.artifact_bucket_name
+  policy = data.aws_iam_policy_document.bucket_policy.json
+}
 
 
