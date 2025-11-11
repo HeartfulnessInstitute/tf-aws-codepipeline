@@ -311,49 +311,53 @@ resource "aws_codepipeline" "deployment_pipeline" {
   tags = var.tags
 }
 
-# --------------------------
-# S3 Bucket Policy (allow CodePipeline to put artifacts)
-# --------------------------
-data "aws_iam_policy_document" "bucket_policy" {
+data "aws_iam_role" "pipeline_role" {
+  count = var.pipeline_role_arn != "" ? 1 : 0
+  arn   = var.pipeline_role_arn
+}
+
+locals {
+  # prefer the resolved name (if ARN provided), else use explicit name variable
+  target_role_name = length(data.aws_iam_role.pipeline_role) > 0 ? data.aws_iam_role.pipeline_role[0].name : var.pipeline_role_name
+
+  # resource ARNs for policy. If artifact_prefix provided, scope to that prefix.
+  artifact_object_arn = var.artifact_prefix != "" ? format("arn:aws:s3:::%s/%s/*", var.artifact_bucket, trim(var.artifact_prefix, "/")) : format("arn:aws:s3:::%s/*", var.artifact_bucket)
+  artifact_bucket_arn = format("arn:aws:s3:::%s", var.artifact_bucket)
+}
+
+# IAM policy document
+data "aws_iam_policy_document" "codepipeline_s3" {
   statement {
-    sid    = "AllowCodePipelinePutObject"
-    effect = "Allow"
+    sid     = "AllowListBucket"
+    effect  = "Allow"
+    actions = ["s3:ListBucket"]
+    resources = [local.artifact_bucket_arn]
 
-    principals {
-      type        = "AWS"
-      identifiers = [var.codepipeline_role_arn]
-    }
-
-    actions = [
-      "s3:PutObject",
-      "s3:GetObject",
-      "s3:GetObjectVersion",
-      "s3:DeleteObject"
-    ]
-
-    resources = [
-      format("arn:aws:s3:::%s/*", var.artifact_bucket_name)
-    ]
+    # if prefix present, require that condition for list? (ListBucket permission is usually bucket-level)
+    # no principals here because we'll convert doc to JSON for an IAM policy resource
   }
 
   statement {
-    sid    = "AllowCodePipelineListBucket"
+    sid = "AllowObjectOperations"
     effect = "Allow"
-
-    principals {
-      type        = "AWS"
-      identifiers = [var.codepipeline_role_arn]
-    }
-
-    actions = ["s3:ListBucket"]
-
-    resources = [
-      format("arn:aws:s3:::%s", var.artifact_bucket_name)
-    ]
+    actions = concat(
+      ["s3:GetObject","s3:GetObjectVersion","s3:PutObject","s3:DeleteObject"],
+      var.allow_put_object_acl ? ["s3:PutObjectAcl"] : []
+    )
+    resources = [local.artifact_object_arn]
   }
 }
 
-resource "aws_s3_bucket_policy" "artifact_bucket_policy" {
-  bucket = var.artifact_bucket_name
-  policy = data.aws_iam_policy_document.bucket_policy.json
+resource "aws_iam_policy" "codepipeline_s3_artifacts" {
+  name        = replace("${var.artifact_bucket}-codepipeline-artifacts", ".", "-")
+  description = "Allow CodePipeline role to operate on artifacts in ${var.artifact_bucket}"
+  policy      = data.aws_iam_policy_document.codepipeline_s3.json
+  tags        = var.tags
+}
+
+# Attach policy to the resolved role name (must be a role name)
+resource "aws_iam_role_policy_attachment" "attach_to_pipeline_role" {
+  count      = local.target_role_name != "" ? 1 : 0
+  role       = local.target_role_name
+  policy_arn = aws_iam_policy.codepipeline_s3_artifacts.arn
 }
