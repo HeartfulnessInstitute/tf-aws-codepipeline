@@ -1,3 +1,17 @@
+terraform {
+  required_providers {
+    aws = {
+      source  = "hashicorp/aws"
+      version = ">= 4.0"
+    }
+  }
+  required_version = ">= 1.0"
+}
+
+provider "aws" {
+  region = var.region
+}
+
 # --------------------------
 # Data & locals
 # --------------------------
@@ -20,6 +34,15 @@ locals {
   all_role_names_map = {
     for n in distinct(concat(var.role_names, local.role_names_from_arns)) : n => n
   }
+
+  # codedeploy resource list helper (avoid inline ternary in big json)
+  codedeploy_resource_list = length(concat(var.codedeploy_application_arns, var.codedeploy_deploymentgroup_arns)) == 0 ?
+    [format("arn:aws:codedeploy:%s:%s:deploymentconfig:*", local.region, local.account_id)] :
+    concat(
+      var.codedeploy_application_arns,
+      var.codedeploy_deploymentgroup_arns,
+      [format("arn:aws:codedeploy:%s:%s:deploymentconfig:*", local.region, local.account_id)]
+    )
 
   # Build policy document
   policy = {
@@ -46,8 +69,8 @@ locals {
             "s3:ListBucket"
           ]
           Resource = var.s3_bucket == "" ? ["*"] : [
-            "arn:aws:s3:::${var.s3_bucket}",
-            "arn:aws:s3:::${var.s3_bucket}/*"
+            format("arn:aws:s3:::%s", var.s3_bucket),
+            format("arn:aws:s3:::%s/*", var.s3_bucket)
           ]
         },
         {
@@ -63,14 +86,7 @@ locals {
             "codedeploy:GetDeploymentConfig",
             "codedeploy:List*"
           ]
-         Resource = length(concat(var.codedeploy_application_arns, var.codedeploy_deploymentgroup_arns)) == 0 ?
-  [format("arn:aws:codedeploy:%s:%s:deploymentconfig:*", local.region, local.account_id)] :
-  concat(
-    var.codedeploy_application_arns,
-    var.codedeploy_deploymentgroup_arns,
-    [format("arn:aws:codedeploy:%s:%s:deploymentconfig:*", local.region, local.account_id)]
-  )
-
+          Resource = local.codedeploy_resource_list
         },
         {
           Sid    = "AllowEC2AccessForDeployments"
@@ -397,7 +413,7 @@ resource "aws_codepipeline" "deployment_pipeline" {
   stage {
     name = "Deploy"
 
-      action {
+    action {
       name             = "CodeDeploy"
       category         = "Deploy"
       owner            = "AWS"
@@ -414,14 +430,18 @@ resource "aws_codepipeline" "deployment_pipeline" {
 
   tags = var.tags
 }
+
+# --------------------------
+# S3 bucket policy to allow pipeline role to PutObject (resource-based)
+# --------------------------
 data "aws_iam_policy_document" "bucket_policy" {
   statement {
-    sid = "AllowCodePipelinePutObject"
-    effect = "Allow"
+    sid     = "AllowCodePipelinePutObject"
+    effect  = "Allow"
 
     principals {
       type        = "AWS"
-      identifiers = [var.codepipeline_role_arn]   # the role ARN that assumes the pipeline
+      identifiers = [var.codepipeline_role_arn]
     }
 
     actions = [
@@ -432,13 +452,13 @@ data "aws_iam_policy_document" "bucket_policy" {
     ]
 
     resources = [
-      "arn:aws:s3:::${var.artifact_bucket_name}/*"
+      format("arn:aws:s3:::%s/*", var.artifact_bucket_name)
     ]
   }
 
   statement {
-    sid = "AllowCodePipelineListBucket"
-    effect = "Allow"
+    sid     = "AllowCodePipelineListBucket"
+    effect  = "Allow"
 
     principals {
       type        = "AWS"
@@ -450,7 +470,7 @@ data "aws_iam_policy_document" "bucket_policy" {
     ]
 
     resources = [
-      "arn:aws:s3:::${var.artifact_bucket_name}"
+      format("arn:aws:s3:::%s", var.artifact_bucket_name)
     ]
   }
 }
