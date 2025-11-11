@@ -37,15 +37,15 @@ locals {
   }
 
   # --------------------------
-  # Helper: CodeDeploy resource list
+  # Helper: CodeDeploy resource list - FIXED
   # --------------------------
-  codedeploy_resource_list = length(concat(var.codedeploy_application_arns, var.codedeploy_deploymentgroup_arns)) == 0 ?
-    [format("arn:aws:codedeploy:%s:%s:deploymentconfig:*", local.region, local.account_id)] :
-    concat(
-      var.codedeploy_application_arns,
-      var.codedeploy_deploymentgroup_arns,
-      [format("arn:aws:codedeploy:%s:%s:deploymentconfig:*", local.region, local.account_id)]
-    )
+  codedeploy_resource_list = length(concat(var.codedeploy_application_arns, var.codedeploy_deploymentgroup_arns)) == 0 ? [
+    format("arn:aws:codedeploy:%s:%s:deploymentconfig:*", local.region, local.account_id)
+  ] : concat(
+    var.codedeploy_application_arns,
+    var.codedeploy_deploymentgroup_arns,
+    [format("arn:aws:codedeploy:%s:%s:deploymentconfig:*", local.region, local.account_id)]
+  )
 
   # --------------------------
   # Policy JSON definition
@@ -79,9 +79,9 @@ locals {
           ]
         },
         {
-          Sid      = "AllowCodeDeployActions"
-          Effect   = "Allow"
-          Action   = [
+          Sid    = "AllowCodeDeployActions"
+          Effect = "Allow"
+          Action = [
             "codedeploy:CreateDeployment",
             "codedeploy:GetDeployment",
             "codedeploy:RegisterApplicationRevision",
@@ -124,9 +124,9 @@ locals {
           Resource = "*"
         },
         {
-          Sid    = "AllowIAMPassRole"
-          Effect = "Allow"
-          Action = "iam:PassRole"
+          Sid      = "AllowIAMPassRole"
+          Effect   = "Allow"
+          Action   = "iam:PassRole"
           Resource = var.pass_role_resource == "" ? "*" : var.pass_role_resource
         }
       ],
@@ -245,9 +245,9 @@ resource "aws_codedeploy_app" "donation_app" {
 }
 
 resource "aws_codedeploy_deployment_group" "donation_app_group" {
-  app_name              = aws_codedeploy_app.donation_app.name
-  deployment_group_name = "${var.environment}-${var.project_name}-donation-app-group"
-  service_role_arn      = var.codedeploy_role_arn
+  app_name               = aws_codedeploy_app.donation_app.name
+  deployment_group_name  = "${var.environment}-${var.project_name}-donation-app-group"
+  service_role_arn       = var.codedeploy_role_arn
   deployment_config_name = var.deployment_config_name
 
   ec2_tag_set {
@@ -309,12 +309,12 @@ resource "aws_codepipeline" "deployment_pipeline" {
   stage {
     name = "Deploy"
     action {
-      name             = "CodeDeploy"
-      category         = "Deploy"
-      owner            = "AWS"
-      provider         = "CodeDeploy"
-      version          = "1"
-      input_artifacts  = ["build_output"]
+      name            = "CodeDeploy"
+      category        = "Deploy"
+      owner           = "AWS"
+      provider        = "CodeDeploy"
+      version         = "1"
+      input_artifacts = ["build_output"]
       configuration = {
         ApplicationName     = var.codedeploy_app_name
         DeploymentGroupName = var.codedeploy_group_name
@@ -330,8 +330,8 @@ resource "aws_codepipeline" "deployment_pipeline" {
 # --------------------------
 data "aws_iam_policy_document" "bucket_policy" {
   statement {
-    sid     = "AllowCodePipelinePutObject"
-    effect  = "Allow"
+    sid    = "AllowCodePipelinePutObject"
+    effect = "Allow"
 
     principals {
       type        = "AWS"
@@ -351,8 +351,8 @@ data "aws_iam_policy_document" "bucket_policy" {
   }
 
   statement {
-    sid     = "AllowCodePipelineListBucket"
-    effect  = "Allow"
+    sid    = "AllowCodePipelineListBucket"
+    effect = "Allow"
 
     principals {
       type        = "AWS"
